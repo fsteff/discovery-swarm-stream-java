@@ -55,6 +55,7 @@ public class LPMInputStream implements Iterable<ByteBuffer>{
 	
 	private void nextMsg(ByteBuffer in) throws BufferUnderflowException, IOException{
 		if(current != null) {
+			current.flip();
 			buffers.add(current);
 		}
 		remaining = parseVarint(in);	
@@ -71,10 +72,12 @@ public class LPMInputStream implements Iterable<ByteBuffer>{
 	private int parseVarint(ByteBuffer in) throws BufferUnderflowException{
 		int num = 0;
 		byte b = 0;
-		while((b = in.get()) < 128) {
-			num <<= 8;
+		// TODO: check
+		while((b = in.get()) >= 128) {
 			num |= b;
+			num <<= 7;
 		}
+		num |= b;
 		return num;
 	}
 

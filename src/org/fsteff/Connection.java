@@ -1,26 +1,32 @@
 package org.fsteff;
+import static java.nio.charset.StandardCharsets.UTF_8;
+
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
-import java.util.HashMap;
+import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 
 import org.java_websocket.WebSocket;
 
 import com.google.protobuf.ByteString;
 
+import net.iharder.Base64;
 import protocol.Protocol.EventType;
 import protocol.Protocol.SwarmEvent;
 
 public class Connection {
 	private final LPMInputStream lpmIn = new LPMInputStream();
 	private WebSocket websocket;
-	private HashMap<String, SocketChannel> sockets = new HashMap<>();
+	private ConcurrentHashMap<String, SocketChannel> sockets = new ConcurrentHashMap<>();
+	private boolean gotConnect = false;
 	
 	private static final Logger LOGGER = Logger.getLogger(DiscoveryServer.class.getName());
+	private static final Random rand = new Random();
 	
 	public Connection(WebSocket ws) {
 		this.websocket = ws;
@@ -38,8 +44,7 @@ public class Connection {
 				SwarmEvent evt = SwarmEvent.parseFrom(msg);
 				switch (evt.getType().getNumber()) {
 				case EventType.OPEN_VALUE:
-					onOpen(evt);
-					break;				
+					throw new IOException("got OPEN from client");			
 				case EventType.CLOSE_VALUE:
 					onClose(evt);
 					break;
@@ -76,30 +81,61 @@ public class Connection {
 		sockets.clear();
 	}
 	
-	private void onOpen(SwarmEvent evt) {
-		
-	}
-	
 	private void onClose(SwarmEvent evt) {
-		
+		close();
+		// anything more to do?
+		websocket.close();
 	}
 	
 	private void onConnect(SwarmEvent evt) {
-		
+		gotConnect = true;
 	}
 	
 	private void onData(SwarmEvent evt) {
+		if(! gotConnect) 
+			LOGGER.warning("CONNECT is needed before DATA");
+		
+		ByteString idStr = evt.getId();
+		String id = idStr.toStringUtf8();
+		SocketChannel chan = sockets.get(id);
+		if(chan != null) {
+			try {
+				chan.write(evt.getData().asReadOnlyByteBuffer());
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}else {
+			LOGGER.warning("invalid streamId in DATA message");
+		}
 		
 	}
 	
 	private void onJoin(SwarmEvent evt) {
+		if(! gotConnect) 
+			LOGGER.warning("CONNECT is needed before JOIN");
+		
+		
 		ByteString idStr = evt.getId();
 		String id = idStr.toStringUtf8();
 		Set<InetSocketAddress> addrs = DatDNS.lookupDefaultServers(id);
 		for(InetSocketAddress addr : addrs) {
 			try {
-				SocketChannel chan = SocketChannel.open(addr);
-				// TODO: generate id and put into hashmap
+				SocketChannel chan = SocketChannel.open(addr);		
+				LOGGER.info("successfully connected to peer: " + addr.getHostName() + ":" + addr.getPort());
+				// generate token
+				String strToken = null;
+				do {
+					byte[] token = new byte[4];
+					rand.nextBytes(token);
+					strToken = Base64.encodeBytes(token);
+					// very unlikely to happen twice
+				} while(sockets.containsKey(strToken));
+				// store channel as token
+				sockets.put(strToken, chan);
+				
+				setUpForwardingThread(chan, strToken);
+				
+				sendMsg(EventType.OPEN_VALUE, strToken.getBytes(UTF_8), id.getBytes(UTF_8));
 			}catch (IOException e) {
 				e.printStackTrace();
 			}	
@@ -107,6 +143,101 @@ public class Connection {
 	}
 	
 	private void onLeave(SwarmEvent evt) {
+		if(! gotConnect) 
+			LOGGER.warning("CONNECT is needed before LEAVE");
+		ByteString idStr = evt.getId();
+		String id = idStr.toStringUtf8();
+		SocketChannel chan = sockets.get(id);
+		if(chan != null) {
+			try {
+				chan.close();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}else {
+			LOGGER.warning("Got invalid LEAVE streamId");
+		}
 		
+		sendMsg(EventType.CLOSE_VALUE, id.getBytes(UTF_8), null);
+	}
+	
+	private void sendMsg(int type, byte[] id, byte[] data) {
+		SwarmEvent.Builder builder = SwarmEvent.newBuilder();
+		builder.setType(EventType.forNumber(type));
+		if(id != null)
+			builder.setId(ByteString.copyFrom(id));
+		if(data != null)
+			builder.setData(ByteString.copyFrom(data));
+		
+		SwarmEvent evt = builder.build();
+		byte[] msg = evt.toByteArray();
+		byte[] len = toVarint(msg.length);
+		ByteBuffer buf = ByteBuffer.allocate(len.length + msg.length);
+		buf.put(len);
+		buf.put(msg);
+		buf.flip();
+		websocket.send(buf);
+		LOGGER.info("sent ws message: " + EventType.forNumber(type) + " " + id + " " + data);
+	}
+	
+	private byte[] toVarint(int num) {
+		byte[] res = new byte[getNumBytes(num)];
+		// TODO: check 
+		for(int i = res.length-1; i >= 0; i--) {
+			res[i] = (byte) (num & 0x7f);
+			if(i != res.length-1)
+				res[i] |= 0x80;
+			num >>= 7;
+		}
+		
+		return res;
+	}
+	
+	private int getNumBytes(int num) {
+		if(num < 0 || num > 128*128*128*128) {
+			LOGGER.severe("number outside of varint / unsigned int32 range");
+			return -1;
+		}
+		
+		if(num < 128) return 1;
+		else if(num <128*128) return 2;
+		else if(num < 128*128*128) return 3;
+		else return 4;
+	}
+	
+	private void setUpForwardingThread(final SocketChannel chan, final String id) {
+		Thread t = new Thread(new Runnable() {
+			
+			@Override
+			public void run() {
+				final ByteBuffer buf = ByteBuffer.allocate(2000);
+				try {
+					while(websocket.isOpen() && chan.isOpen()) {
+						chan.read(buf);
+					} 
+				}catch (IOException e) {
+					e.printStackTrace();
+				}finally {
+					// clean up
+					sockets.remove(id);
+					
+					// if closed by peer
+					if(websocket.isOpen()) {
+						sendMsg(EventType.CLOSE_VALUE, id.getBytes(UTF_8), null);
+					}
+					
+					// if closed by chient
+					if(chan.isOpen()) {
+						try {
+							chan.close();
+						} catch (IOException e) {
+							e.printStackTrace();
+						}
+					}
+				}
+			}
+		});
+		t.setDaemon(true);
+		t.start();
 	}
 }

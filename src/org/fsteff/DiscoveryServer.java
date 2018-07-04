@@ -1,4 +1,5 @@
 package org.fsteff;
+import static java.nio.charset.StandardCharsets.*;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.concurrent.ConcurrentHashMap;
@@ -45,7 +46,7 @@ public class DiscoveryServer extends WebSocketServer {
 	@Override
 	public void onMessage(WebSocket ws, String message) {
 		Connection c = connections.get(ws);
-		ByteBuffer buf = ByteBuffer.wrap(message.getBytes());
+		ByteBuffer buf = ByteBuffer.wrap(message.getBytes(UTF_8));
 		if(c != null) {
 			c.handle(buf);
 		}
