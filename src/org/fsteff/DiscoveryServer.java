@@ -64,12 +64,14 @@ public class DiscoveryServer extends WebSocketServer {
 
 	@Override
 	public void onOpen(WebSocket ws, ClientHandshake arg1) {
+		LOGGER.info("new connection: " + ws.getResourceDescriptor());
 		Connection connection = new Connection(ws);
 		this.connections.put(ws, connection);
 	}
 
 	@Override
 	public void onStart() {
+		LOGGER.info("DiscoveryServer running");
 	}
 
 }

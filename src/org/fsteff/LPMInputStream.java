@@ -22,7 +22,13 @@ public class LPMInputStream implements Iterable<ByteBuffer>{
 			remaining--;
 			
 			if(remaining <= 0) {
-				nextMsg(data);
+				if(data.remaining() > 0) {
+					nextMsg(data);
+				}else {
+					current.flip();
+					buffers.add(current);
+					current = null;
+				}
 			}
 		}
 	}
