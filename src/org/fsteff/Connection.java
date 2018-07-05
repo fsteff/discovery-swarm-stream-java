@@ -7,11 +7,15 @@ import java.net.SocketAddress;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.Consumer;
 import java.util.logging.Logger;
 
 import org.java_websocket.WebSocket;
@@ -24,10 +28,11 @@ import protocol.Protocol.SwarmEvent;
 
 public class Connection {
 	private final LPMInputStream lpmIn = new LPMInputStream();
-	private WebSocket websocket;
-	private ConcurrentHashMap<String, SocketChannel> sockets = new ConcurrentHashMap<>();
+	private final WebSocket websocket;
+	private final ConcurrentHashMap<String, SocketChannel> sockets = new ConcurrentHashMap<>();
+	private final List<InetSocketAddress> connectingSockets = Collections.synchronizedList(new ArrayList<InetSocketAddress>());
 	private boolean gotConnect = false;
-	private ExecutorService pool = Executors.newWorkStealingPool();
+	//private final ExecutorService pool = Executors.newWorkStealingPool();
 	
 	private static final Logger LOGGER = Logger.getLogger(DiscoveryServer.class.getName());
 	private static final Random rand = new Random();
@@ -119,40 +124,13 @@ public class Connection {
 		if(! gotConnect) 
 			LOGGER.warning("CONNECT is needed before JOIN");
 		
-		
-		
 		ByteString idStr = evt.getId();
 		String id = idStr.toStringUtf8();
 		LOGGER.info("JOIN " + id);
 		
-		Set<InetSocketAddress> addrs = DatDNS.lookupDefaultServers(id);
-		for(InetSocketAddress addr : addrs) {
-			pool.submit(new Runnable() {			
-				@Override
-				public void run() {
-					try {
-						SocketChannel chan = SocketChannel.open(addr);		
-						LOGGER.info("successfully connected to peer: " + addr.getHostName() + ":" + addr.getPort());
-						// generate token
-						String strToken = null;
-						do {
-							byte[] token = new byte[4];
-							rand.nextBytes(token);
-							strToken = Base64.encodeBytes(token);
-							// very unlikely to happen twice
-						} while(sockets.containsKey(strToken));
-						// store channel as token
-						sockets.put(strToken, chan);
-						
-						setUpForwardingThread(chan, strToken);
-						
-						sendMsg(EventType.OPEN_VALUE, strToken.getBytes(UTF_8), id.getBytes(UTF_8));
-					}catch (IOException e) {
-						LOGGER.warning(e.getMessage());
-					}	
-				}
-			});			
-		}
+		OnPeer onPeer = new OnPeer(id);
+		DatMDNS.getInstance().lookup(id, onPeer, false,0); // TODO: announce locally
+		DatDNS.lookupDefaultServers(id, onPeer);
 	}
 	
 	private void onLeave(SwarmEvent evt) {
@@ -171,17 +149,29 @@ public class Connection {
 			LOGGER.warning("Got invalid LEAVE streamId");
 		}
 		
-		sendMsg(EventType.CLOSE_VALUE, id.getBytes(UTF_8), null);
+		sendMsg(EventType.CLOSE, id, null);
+	}
+	
+	private void sendMsg(EventType type, String id, ByteBuffer data) {
+		sendMsg(type, ByteString.copyFromUtf8(id), ByteString.copyFrom(data));
 	}
 	
 	private void sendMsg(int type, byte[] id, byte[] data) {
+		sendMsg(EventType.forNumber(type), 
+				id != null ? ByteString.copyFrom(id) : null, 
+				data != null ? ByteString.copyFrom(data) : null);
+	}
+	
+	private void sendMsg(EventType type, ByteString id, ByteString data) {
 		SwarmEvent.Builder builder = SwarmEvent.newBuilder();
-		builder.setType(EventType.forNumber(type));
-		if(id != null)
-			builder.setId(ByteString.copyFrom(id));
-		if(data != null)
-			builder.setData(ByteString.copyFrom(data));
-		
+		builder.setType(type);
+		if(id != null) {
+			builder.setId(id);
+		}
+		if(data != null) {
+			builder.setData(data);
+		}
+
 		SwarmEvent evt = builder.build();
 		byte[] msg = evt.toByteArray();
 		byte[] len = toVarint(msg.length);
@@ -190,12 +180,11 @@ public class Connection {
 		buf.put(msg);
 		buf.flip();
 		websocket.send(buf);
-		LOGGER.info("sent ws message: " + EventType.forNumber(type) + " " + new String(id) + " " + new String(data));
+		LOGGER.info("sent ws message: " + type + " " + id.toStringUtf8() + " " + data.toStringUtf8());
 	}
 	
 	private byte[] toVarint(int num) {
 		byte[] res = new byte[getNumBytes(num)];
-		// TODO: i think this is wrong 
 		for(int i = res.length-1; i >= 0; i--) {
 			res[i] = (byte) (num & 0x7f);
 			if(i != res.length-1)
@@ -234,6 +223,7 @@ public class Connection {
 				
 				LOGGER.info("SocketChannel "+remote.toString()+" reading thread started");
 				final ByteBuffer buf = ByteBuffer.allocate(2000);			
+				final ByteString idStr = ByteString.copyFromUtf8(id);
 				try {
 					chan.configureBlocking(true);
 					while(websocket.isOpen() && chan.isOpen()) {
@@ -242,7 +232,7 @@ public class Connection {
 						if(buf.remaining() > 0) {
 							LOGGER.info("new message from SocketChannel "+remote.toString());
 							
-							websocket.send(buf);
+							sendMsg(EventType.DATA, idStr, ByteString.copyFrom(buf));
 							buf.clear();
 							LOGGER.info("forwarded message from SocketChannel "+remote.toString()+" to websocket " + websocket.getResourceDescriptor());
 						}
@@ -256,7 +246,7 @@ public class Connection {
 					
 					// if closed by peer
 					if(websocket.isOpen()) {
-						sendMsg(EventType.CLOSE_VALUE, id.getBytes(UTF_8), null);
+						sendMsg(EventType.CLOSE, idStr, null);
 					}
 					
 					// if closed by client
@@ -273,4 +263,45 @@ public class Connection {
 		t.setDaemon(true);
 		t.start();
 	}
+	
+	private class OnPeer implements Consumer<InetSocketAddress>{
+		private final String id;
+		
+		public OnPeer(String id) {
+			this.id = id;
+		}
+		
+		@SuppressWarnings("unlikely-arg-type")
+		@Override
+		public void accept(InetSocketAddress addr) {
+			if(sockets.containsValue(addr) || connectingSockets.contains(addr)) {
+				LOGGER.info("already connected/connecting to " + addr + " - skipping it");
+				return;
+			}
+			try {
+				connectingSockets.add(addr);
+				SocketChannel chan = SocketChannel.open(addr);		
+				LOGGER.info("successfully connected to peer: " + addr.getHostName() + ":" + addr.getPort());
+				// generate token
+				String strToken = null;
+				do {
+					byte[] token = new byte[4];
+					rand.nextBytes(token);
+					strToken = Base64.encodeBytes(token);
+					// very unlikely to happen twice
+				} while(sockets.containsKey(strToken));
+				// store channel as token
+				sockets.put(strToken, chan);
+				
+				setUpForwardingThread(chan, strToken);
+				
+				sendMsg(EventType.OPEN_VALUE, strToken.getBytes(UTF_8), id.getBytes(UTF_8));
+			}catch (IOException e) {
+				LOGGER.warning(e.getMessage());
+			}finally {
+				connectingSockets.remove(addr);
+			}
+		}
+	}
+		
 }
