@@ -68,7 +68,6 @@ public class LPMInputStream implements Iterable<ByteBuffer>{
 		if(remaining <= 0) {
 			current = null;
 			remaining = 0;
-			// in.clear(); //(?)
 			throw new IOException("invalid message length");
 		}
 		
@@ -78,7 +77,6 @@ public class LPMInputStream implements Iterable<ByteBuffer>{
 	private int parseVarint(ByteBuffer in) throws BufferUnderflowException{
 		int num = 0;
 		byte b = 0;
-		// TODO: check
 		while((b = in.get()) >= 128) {
 			num |= b;
 			num <<= 7;
