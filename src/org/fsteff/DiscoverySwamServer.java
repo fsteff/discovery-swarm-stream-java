@@ -1,5 +1,7 @@
 package org.fsteff;
 
+import java.net.InetSocketAddress;
+
 public class DiscoverySwamServer {
 
 	public DiscoverySwamServer() {
@@ -7,7 +9,11 @@ public class DiscoverySwamServer {
 	}
 
 	public static void main(String[] args) {
-		DiscoveryServer srv = new DiscoveryServer();
+		/*Properties props = System.getProperties();
+        props.setProperty("java.net.preferIPv4Stack","true");
+        System.setProperties(props);*/
+        
+		DiscoveryServer srv = new DiscoveryServer(new InetSocketAddress("localhost", 3495));
 		srv.start();
 	}
 

@@ -11,10 +11,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Random;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 import java.util.logging.Logger;
 
@@ -32,7 +29,6 @@ public class Connection {
 	private final ConcurrentHashMap<String, SocketChannel> sockets = new ConcurrentHashMap<>();
 	private final List<InetSocketAddress> connectingSockets = Collections.synchronizedList(new ArrayList<InetSocketAddress>());
 	private boolean gotConnect = false;
-	//private final ExecutorService pool = Executors.newWorkStealingPool();
 	
 	private static final Logger LOGGER = Logger.getLogger(DiscoveryServer.class.getName());
 	private static final Random rand = new Random();
@@ -111,6 +107,7 @@ public class Connection {
 		if(chan != null) {
 			try {
 				chan.write(evt.getData().asReadOnlyByteBuffer());
+				LOGGER.info("forwarded message from websocket to socketchannel id="+id);
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
@@ -129,7 +126,6 @@ public class Connection {
 		LOGGER.info("JOIN " + id);
 		
 		OnPeer onPeer = new OnPeer(id);
-		DatMDNS.getInstance().lookup(id, onPeer, false,0); // TODO: announce locally
 		DatDNS.lookupDefaultServers(id, onPeer);
 	}
 	

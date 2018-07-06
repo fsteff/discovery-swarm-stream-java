@@ -71,7 +71,7 @@ public class DiscoveryServer extends WebSocketServer {
 
 	@Override
 	public void onStart() {
-		LOGGER.info("DiscoveryServer running");
+		LOGGER.info("DiscoveryServer running on " + this.getAddress()); 
 	}
 
 }
