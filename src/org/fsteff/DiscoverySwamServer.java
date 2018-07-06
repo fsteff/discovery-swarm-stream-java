@@ -12,7 +12,6 @@ public class DiscoverySwamServer {
 		/*Properties props = System.getProperties();
         props.setProperty("java.net.preferIPv4Stack","true");
         System.setProperties(props);*/
-        
 		DiscoveryServer srv = new DiscoveryServer(new InetSocketAddress("localhost", 3495));
 		srv.start();
 	}
