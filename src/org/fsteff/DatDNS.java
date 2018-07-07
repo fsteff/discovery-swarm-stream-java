@@ -185,7 +185,7 @@ public class DatDNS {
 		return peers;
 	}
 
-	static Future<Set<InetSocketAddress>> lookupMDNSAsync(String name, Consumer<InetSocketAddress> onPeer) {
+	static Future<Set<InetSocketAddress>> lookupMDNSAsync(final String name, final Consumer<InetSocketAddress> onPeer) {
 		Callable<Set<InetSocketAddress>> doLookup = new Callable<Set<InetSocketAddress>>() {
 			public Set<InetSocketAddress> call() throws Exception {
 				Set<InetSocketAddress> peers = lookupMDNS(name);

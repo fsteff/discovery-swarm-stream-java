@@ -14,7 +14,7 @@ public class DiscoveryServer extends WebSocketServer {
 	private static final Logger LOGGER = Logger.getLogger(DiscoveryServer.class.getName());
 
 	public DiscoveryServer() {
-		super(new InetSocketAddress("localhost", 4200));
+		super(new InetSocketAddress("127.0.0.1", 3495));
 	}
 
 	public DiscoveryServer(InetSocketAddress address) {

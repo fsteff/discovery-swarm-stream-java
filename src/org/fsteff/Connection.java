@@ -215,14 +215,14 @@ public class Connection {
 			});
 		}
 		
-		private void connectTcp(InetSocketAddress addr) {
+		private void connectTcp(final InetSocketAddress addr) {
 			if(connectingSockets.contains(addr)) {
 				LOGGER.info("already connected/connecting to " + addr + " - skipping it");
 				return;
 			}
 			try {
 				connectingSockets.add(addr);
-				TcpConnector chan = new TcpConnector(addr, id);
+				final TcpConnector chan = new TcpConnector(addr, id);
 				LOGGER.info("successfully connected to peer (TCP): " + addr.getHostName() + ":" + addr.getPort());
 				// generate token
 				String strToken = null;
