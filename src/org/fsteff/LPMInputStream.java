@@ -77,9 +77,10 @@ public class LPMInputStream implements Iterable<ByteBuffer>{
 	private int parseVarint(ByteBuffer in) throws BufferUnderflowException{
 		int num = 0;
 		byte b = 0;
+		byte shift = 0;
 		while((b = in.get()) >= 128) {
-			num |= b;
-			num <<= 7;
+			num |= ((b&0x7F) << shift);
+			shift += 7;
 		}
 		num |= b;
 		return num;

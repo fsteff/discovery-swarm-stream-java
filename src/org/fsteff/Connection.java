@@ -166,13 +166,17 @@ public class Connection {
 		buf.put(len);
 		buf.put(msg);
 		buf.flip();
-		websocket.send(buf);
-		LOGGER.info("sent ws message: " + type + " " + id.toStringUtf8() + " " + data.toStringUtf8());
+		try {
+			websocket.send(buf);
+			LOGGER.info("sent ws message: " + type + " " + id.toStringUtf8() + "(length=" + msg.length+")");
+		} catch(Exception e) {
+			LOGGER.warning(e.getMessage());
+		}
 	}
 	
 	private byte[] toVarint(int num) {
 		byte[] res = new byte[getNumBytes(num)];
-		for(int i = res.length-1; i >= 0; i--) {
+		for(int i = 0; i < res.length; i++) {
 			res[i] = (byte) (num & 0x7f);
 			if(i != res.length-1)
 				res[i] |= 0x80;
@@ -248,7 +252,7 @@ public class Connection {
 				chan.connect(new Consumer<ByteBuffer>() {
 					@Override
 					public void accept(ByteBuffer buf) {
-						sendMsg(EventType.DATA, id, buf);
+						sendMsg(EventType.DATA, token, buf);
 					}
 				});
 				

@@ -3,6 +3,8 @@ package org.fsteff;
 import java.net.InetSocketAddress;
 
 public class DiscoverySwamServer {
+	
+	public static final boolean DISABLE_DNS = false;
 
 	public DiscoverySwamServer() {
 		// TODO Auto-generated constructor stub

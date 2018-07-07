@@ -28,14 +28,12 @@ public class DatDNS {
 	public static final String[] defaultServers = { "discovery1.datprotocol.com", "discovery2.datprotocol.com" };
 	private static final Logger LOGGER = Logger.getLogger(DatDNS.class.getName());
 
-	/*static {
-		Name[] names = {};
-		MulticastDNSLookupBase.setDefaultSearchPath(names);
-	}*/
-
 	static void lookupDefaultServers(String name, Consumer<InetSocketAddress> onPeer) {
-		for (String server : defaultServers) {
-			lookupAsync(name, server, onPeer);
+		// for local debugging the DNS server lookups can be disabled
+		if(! DiscoverySwamServer.DISABLE_DNS) {
+			for (String server : defaultServers) {
+				lookupAsync(name, server, onPeer);
+			}
 		}
 		lookupMDNSAsync(name, onPeer);
 	}
