@@ -3,7 +3,6 @@ package org.fsteff;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Consumer;
 
 public abstract class Connector {
 	public final String id;
