@@ -59,7 +59,7 @@ public class DiscoveryServer extends WebSocketServer {
 		if(c != null) {
 			c.handle(message);
 		}
-		LOGGER.info("incoming binary message from " + ws.getResourceDescriptor());
+		LOGGER.info("incoming binary message from " + ws.getResourceDescriptor() + " (connId="+c.connId+")");
 	}
 
 	@Override

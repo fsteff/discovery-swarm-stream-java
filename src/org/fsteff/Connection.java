@@ -7,16 +7,20 @@ import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
+import java.util.Vector;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Logger;
 
 import org.java_websocket.WebSocket;
 
 import com.google.protobuf.ByteString;
+import com.google.protobuf.InvalidProtocolBufferException;
 
 import net.iharder.Base64;
 import protocol.Protocol.EventType;
@@ -25,62 +29,100 @@ import protocol.Protocol.SwarmEvent;
 public class Connection {
 	private final LPMInputStream lpmIn = new LPMInputStream();
 	private final WebSocket websocket;
-	private final ConcurrentHashMap<String, Connector> connections = new ConcurrentHashMap<>();
+	private final ConcurrentHashMap<String, Connector> connectors = new ConcurrentHashMap<>();
 	private final List<InetSocketAddress> connectingSockets = Collections.synchronizedList(new ArrayList<InetSocketAddress>());
 	private boolean gotConnect = false;
 	
-	private static final Logger LOGGER = Logger.getLogger(DiscoveryServer.class.getName());
+	private final Logger LOGGER;
 	private static final Random rand = new Random();
 	private static ExecutorService pool = Executors.newCachedThreadPool();
 	
+	private final ConcurrentHashMap<String, OnWsPeer> onWsPeerHandlers = new ConcurrentHashMap<>();
+	private final List<Integer> wsConnections = Collections.synchronizedList(new ArrayList<Integer>());
+	
+	public static final AtomicInteger connIdCtr = new AtomicInteger(0);
+	public final int connId;
+	
 	public Connection(WebSocket ws) {
 		this.websocket = ws;
+		this.connId = connIdCtr.incrementAndGet();
+		LOGGER = Logger.getLogger(Connection.class.getName() + "#" + connId);
 	}
 	
 	public void handle(ByteBuffer message) {
 		try {
 			lpmIn.write(message);
-		} catch (BufferUnderflowException | IOException e) {
-			e.printStackTrace();
-		}
-
-		for(ByteBuffer msg : lpmIn) {
-			try {
-				SwarmEvent evt = SwarmEvent.parseFrom(msg);
-				switch (evt.getType().getNumber()) {
-				case EventType.OPEN_VALUE:
-					throw new IOException("got OPEN from client");			
-				case EventType.CLOSE_VALUE:
-					onClose(evt);
-					break;
-				case EventType.CONNECT_VALUE:
-					onConnect(evt);
-					break;
-				case EventType.DATA_VALUE:
-					onData(evt);
-					break;
-				case EventType.JOIN_VALUE:
-					onJoin(evt);
-					break;
-				case EventType.LEAVE_VALUE:
-					onLeave(evt);
-					break;
-
-				default:
-					throw new IOException("invalid message type");
+			for(ByteBuffer msg : lpmIn) {
+				try {
+					SwarmEvent evt = SwarmEvent.parseFrom(msg);
+					LOGGER.info("processing message: " + evt.getType() + " (connId="+connId + ")");
+					switch (evt.getType().getNumber()) {
+					case EventType.OPEN_VALUE:
+						throw new IOException("got OPEN from client");			
+					case EventType.CLOSE_VALUE:
+						onClose(evt);
+						break;
+					case EventType.CONNECT_VALUE:
+						onConnect(evt);
+						break;
+					case EventType.DATA_VALUE:
+						onData(evt);
+						break;
+					case EventType.JOIN_VALUE:
+						onJoin(evt);
+						break;
+					case EventType.LEAVE_VALUE:
+						onLeave(evt);
+						break;
+	
+					default:
+						throw new IOException("invalid message type");
+					}
+					
+				} catch(InvalidProtocolBufferException e) {
+					e.printStackTrace();
+					this.close();
+				} catch (Exception e) {
+					e.printStackTrace();
 				}
-				
-			} catch (Exception e) {
-				e.printStackTrace();
 			}
+		}
+		catch (BufferUnderflowException | IOException e) {
+			e.printStackTrace();
+			this.close();
 		}
 	}
 	public void close() {
-		for(Connector chan : connections.values()) {
+		for(Connector chan : connectors.values()) {
 			chan.disconnect();
 		}
-		connections.clear();
+		connectors.clear();
 		connectingSockets.clear();
+		if(websocket.isOpen()) {
+			websocket.close();
+		}
+	}
+	
+	public WsConnector getWsConnector(String id) {
+		try {
+			if(! websocket.isOpen())
+				return null;
+			return new WsConnector(id, connId);
+		} catch (Exception e) {
+			e.printStackTrace();
+			return null;
+		}
+	}
+	
+	public void onWsConnection(WsConnector conn) {
+		if(conn == null) return;
+		if(onWsPeerHandlers.containsKey(conn.id)) {
+			onWsPeerHandlers.get(conn.id).accept(conn);
+		}else {
+			OnWsPeer handler = new OnWsPeer(conn.id);
+			handler.accept(conn);
+			onWsPeerHandlers.put(conn.id, handler);
+		}
 	}
 	
 	private void onClose(SwarmEvent evt) {
@@ -100,7 +142,7 @@ public class Connection {
 		
 		ByteString idStr = evt.getId();
 		String id = idStr.toStringUtf8();
-		Connector chan = connections.get(id);
+		Connector chan = connectors.get(id);
 		if(chan != null) {
 			chan.send(evt.getData().asReadOnlyByteBuffer());
 			LOGGER.info("forwarded message from websocket to socketchannel id="+id);
@@ -118,8 +160,10 @@ public class Connection {
 		String id = idStr.toStringUtf8();
 		LOGGER.info("JOIN " + id);
 		
-		OnPeer onPeer = new OnPeer(id);
+		OnTcpPeer onPeer = new OnTcpPeer(id);
 		DatDNS.lookupDefaultServers(id, onPeer);
+		
+		ProxyDiscovery.join(id, this);
 	}
 	
 	private void onLeave(SwarmEvent evt) {
@@ -127,7 +171,7 @@ public class Connection {
 			LOGGER.warning("CONNECT is needed before LEAVE");
 		ByteString idStr = evt.getId();
 		String id = idStr.toStringUtf8();
-		Connector chan = connections.get(id);
+		Connector chan = connectors.get(id);
 		if(chan != null) {
 			chan.disconnect();
 		}else {
@@ -135,10 +179,12 @@ public class Connection {
 		}
 		
 		sendMsg(EventType.CLOSE, id, null);
+		ProxyDiscovery.leave(id, this);
 	}
 	
 	private void sendMsg(EventType type, String id, ByteBuffer data) {
-		sendMsg(type, ByteString.copyFromUtf8(id), ByteString.copyFrom(data));
+		ByteString dataStr = data != null ? ByteString.copyFrom(data) : null;
+		sendMsg(type, ByteString.copyFromUtf8(id), dataStr);
 	}
 	
 	private void sendMsg(int type, byte[] id, byte[] data) {
@@ -166,7 +212,7 @@ public class Connection {
 		buf.flip();
 		try {
 			websocket.send(buf);
-			LOGGER.info("sent ws message: " + type + " " + id.toStringUtf8() + "(length=" + msg.length+")");
+			LOGGER.info("sent ws message: " + type + " " + id.toStringUtf8() + "(length=" + msg.length+") - (connId="+ connId + ")");
 		} catch(Exception e) {
 			LOGGER.warning(e.getMessage());
 		}
@@ -196,10 +242,21 @@ public class Connection {
 		else return 4;
 	}
 	
-	private class OnPeer implements Consumer<InetSocketAddress>{
+	private String generateToken() {
+		String strToken = null;
+		do {
+			byte[] token = new byte[4];
+			rand.nextBytes(token);
+			strToken = Base64.encodeBytes(token);
+			// very unlikely to happen twice
+		} while(connectors.containsKey(strToken));
+		return strToken;
+	}
+	
+	private class OnTcpPeer implements Consumer<InetSocketAddress>{
 		private final String id;
 		
-		public OnPeer(String id) {
+		public OnTcpPeer(String id) {
 			this.id = id;
 		}
 		
@@ -223,23 +280,15 @@ public class Connection {
 				final TcpConnector chan = new TcpConnector(addr, id);
 				LOGGER.info("successfully connected to peer (TCP): " + addr.getHostName() + ":" + addr.getPort());
 				// generate token
-				String strToken = null;
-				do {
-					byte[] token = new byte[4];
-					rand.nextBytes(token);
-					strToken = Base64.encodeBytes(token);
-					// very unlikely to happen twice
-				} while(connections.containsKey(strToken));
+				final String token = generateToken();
 				// store channel as token
-				connections.put(strToken, chan);
-				
-				final String token = strToken;
+				connectors.put(token, chan);
 				chan.setOnClose(new Runnable() {		
 					@SuppressWarnings("unlikely-arg-type")
 					@Override
 					public void run() {
 						connectingSockets.remove(chan);
-						connections.remove(token);
+						connectors.remove(token);
 						LOGGER.info("connection to " + addr + " closed");
 						if(websocket.isOpen()) {
 							sendMsg(EventType.CLOSE, id, null);
@@ -254,11 +303,63 @@ public class Connection {
 					}
 				});
 				
-				sendMsg(EventType.OPEN_VALUE, strToken.getBytes(UTF_8), id.getBytes(UTF_8));
+				sendMsg(EventType.OPEN_VALUE, token.getBytes(UTF_8), id.getBytes(UTF_8));
 			}catch (IOException e) {
 				LOGGER.warning(e.getMessage());
 			}
 		}
 	}
+	
+	class OnWsPeer implements Consumer<WsConnector>{
+		public final String id;
+		private OnWsPeer(String id) {
+			this.id = id;
+		}
 		
+		@Override
+		public void accept(final WsConnector connector) {
+			pool.submit(new Runnable() {
+				@Override
+				public void run() {
+					connectWs(connector);
+				}
+			});
+		}
+		
+		private void connectWs(final WsConnector chan) {
+			if(wsConnections.contains(chan.connectionId)) {
+				LOGGER.info("already connected to WS channel " + chan.connectionId);
+				return;
+			}
+			LOGGER.info("connecting to WsConnector...");
+			final String token = generateToken();
+			// store channel as token
+			connectors.put(token, chan);
+					
+			chan.setOnClose(new Runnable() {
+				@Override
+				public void run() {
+					chan.disconnect();
+					connectors.remove(token);
+					if(websocket.isOpen()) {
+						sendMsg(EventType.CLOSE, id, null);
+					}
+				}
+			});
+			
+			chan.connect(new Consumer<ByteBuffer>() {
+				@Override
+				public void accept(ByteBuffer buf) {
+					sendMsg(EventType.DATA, token, buf);
+				}
+			});
+			try {
+				chan.awaitConnection();
+				LOGGER.info("successfully connected to peer (WS)");
+				sendMsg(EventType.OPEN_VALUE, token.getBytes(UTF_8), id.getBytes(UTF_8));
+			}catch(InterruptedException e) {
+				LOGGER.warning("connecting to WsConnector timed out");
+			}
+		}
+	}	
 }

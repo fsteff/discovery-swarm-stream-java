@@ -45,7 +45,7 @@ public class TcpConnector extends Connector {
 						}
 					} 
 				}catch (IOException e) {
-					e.printStackTrace();
+					LOGGER.warning(e.getMessage());
 				}finally {
 					LOGGER.info("shutting down listener of SocketChannel " + remote.toString());
 					
@@ -60,6 +60,7 @@ public class TcpConnector extends Connector {
 						
 					if(onClose != null) {
 						onClose.run();
+						onClose = null;
 					}
 				}
 			}

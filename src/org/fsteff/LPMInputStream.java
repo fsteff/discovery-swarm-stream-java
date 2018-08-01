@@ -78,11 +78,11 @@ public class LPMInputStream implements Iterable<ByteBuffer>{
 		int num = 0;
 		byte b = 0;
 		byte shift = 0;
-		while((b = in.get()) >= 128) {
+		while(((b = in.get()) & 0x80) != 0) {
 			num |= ((b&0x7F) << shift);
 			shift += 7;
 		}
-		num |= b;
+		num |= b << shift;
 		return num;
 	}
 
