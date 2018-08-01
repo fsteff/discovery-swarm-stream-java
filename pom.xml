@@ -2,7 +2,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>org.fsteff</groupId>
   <artifactId>discovery-swarm-stream-java</artifactId>
-  <version>0.1.1</version>
+  <version>0.1.2</version>
   
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -92,8 +92,7 @@
                                 <Bundle-SymbolicName>${project.artifactId}</Bundle-SymbolicName>
                                 <Bundle-Name>${project.name}</Bundle-Name>
                                 <Bundle-Version>${project.version}</Bundle-Version>
-                                <!-- Bundle-Activator>net.posick.mdns.Activator</Bundle-Activator -->
-                                <Export-Package>org.fsteff.*</Export-Package>
+                                <Export-Package>org.fsteff</Export-Package>
                             </instructions>
                             <supportedProjectTypes>
                                 <supportedProjectType>jar</supportedProjectType>
