@@ -3,7 +3,7 @@ server-side java implementation of [discovery-swarm-stream](https://github.com/R
 Works with java 1.7 and on android 5.1 upwards.<br>
 Android demo: [DatDiscoveryWebview](https://github.com/fsteff/DatDiscoveryWebview)
 
-##usage
+## usage
 This library is not published on maven, but you can use [jitpack](https://jitpack.io/#fsteff/discovery-swarm-stream-java)
 
 
