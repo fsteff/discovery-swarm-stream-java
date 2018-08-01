@@ -2,7 +2,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>org.fsteff</groupId>
   <artifactId>discovery-swarm-stream-java</artifactId>
-  <version>0.1.3</version>
+  <version>0.1.4</version>
   
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
