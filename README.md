@@ -6,6 +6,7 @@ Android demo: [DatDiscoveryWebview](https://github.com/fsteff/DatDiscoveryWebvie
 ## features/limitations
 - TCP connections to the peers (no uTP)
 - DNS and mDNS lookup (no dht)
+- routing between websocket peers
 - currently does not announce to the DNS (need to find a way to get dnsjava to send additional data)
 - does not listen for incoming connections (coming soon)
 
