@@ -1,5 +1,7 @@
 # discovery-swarm-stream-java
 server-side java implementation of [discovery-swarm-stream](https://github.com/RangerMauve/discovery-swarm-stream)<br>
+Works with java 1.7 and on android 5.1 upwards.<br>
+Android demo: [DatDiscoveryWebview](https://github.com/fsteff/DatDiscoveryWebview)
 
 ## features/limitations
 - TCP connections to the peers (no uTP)
