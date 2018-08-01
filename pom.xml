@@ -6,9 +6,16 @@
   
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <maven.compiler.target>1.8</maven.compiler.target>
-    <maven.compiler.source>1.8</maven.compiler.source>
+    <maven.compiler.target>1.7</maven.compiler.target>
+    <maven.compiler.source>1.7</maven.compiler.source>
   </properties>
+  
+  <repositories>
+	  <repository>
+	    <id>jitpack.io</id>
+	    <url>https://jitpack.io</url>
+	  </repository>
+  </repositories>
   
   <dependencies>
   	<dependency>
@@ -16,6 +23,12 @@
 	    <artifactId>dnsjava</artifactId>
 	    <version>2.1.8</version>
 	</dependency>
+	<dependency>
+	    <groupId>com.github.fsteff</groupId>
+	    <artifactId>mdnsjava</artifactId>
+	    <version>master-SNAPSHOT</version>
+	</dependency>
+
 	<dependency>
     	<groupId>net.iharder</groupId>
    	 	<artifactId>base64</artifactId>
@@ -32,5 +45,5 @@
 	  <artifactId>protobuf-java</artifactId>
 	  <version>3.5.1</version>
 	</dependency>
-  </dependencies>
+  </dependencies> 
 </project>
