@@ -1,7 +1,10 @@
 package org.fsteff;
 import static java.nio.charset.StandardCharsets.*;
+
+import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
+import java.util.Iterator;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 
@@ -72,6 +75,20 @@ public class DiscoveryServer extends WebSocketServer {
 	@Override
 	public void onStart() {
 		LOGGER.info("DiscoveryServer running on " + this.getAddress()); 
+	}
+	
+	public void shutdown() {
+		Iterator<Connection> iter = connections.values().iterator();
+		while(iter.hasNext()) {
+			iter.next().close();
+		}
+		try {
+			this.stop();
+		} catch (IOException e) {
+			e.printStackTrace();
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
 	}
 
 }
