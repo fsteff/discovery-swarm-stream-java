@@ -78,12 +78,14 @@ public class DiscoveryServer extends WebSocketServer {
 	}
 	
 	public void shutdown() {
+		LOGGER.info("shutting down server");
 		Iterator<Connection> iter = connections.values().iterator();
 		while(iter.hasNext()) {
 			iter.next().close();
 		}
 		try {
 			this.stop();
+			LOGGER.info("server stopped");
 		} catch (IOException e) {
 			e.printStackTrace();
 		} catch (InterruptedException e) {
