@@ -2,7 +2,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>org.fsteff</groupId>
   <artifactId>discovery-swarm-stream-java</artifactId>
-  <version>0.1.4</version>
+  <version>0.1.5</version>
   
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -29,6 +29,12 @@
 	    <groupId>com.github.fsteff</groupId>
 	    <artifactId>mdnsjava</artifactId>
 	    <version>master-SNAPSHOT</version>
+	    <exclusions>
+	    	<exclusion>
+	    		<groupId>com.github.fsteff.mdnsjava</groupId>
+	    		<artifactId>mdnsjava-spi</artifactId>
+	    	</exclusion>
+	    </exclusions>
 	</dependency>
 
 	<dependency>
