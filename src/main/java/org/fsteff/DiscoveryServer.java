@@ -2,6 +2,7 @@ package org.fsteff;
 import static java.nio.charset.StandardCharsets.*;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.Iterator;
@@ -17,7 +18,7 @@ public class DiscoveryServer extends WebSocketServer {
 	private static final Logger LOGGER = Logger.getLogger(DiscoveryServer.class.getName());
 
 	public DiscoveryServer() {
-		super(new InetSocketAddress("127.0.0.1", 3495));
+		super(new InetSocketAddress(InetAddress.getLoopbackAddress(), 3495));
 	}
 
 	public DiscoveryServer(InetSocketAddress address) {

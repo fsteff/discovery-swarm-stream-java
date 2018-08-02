@@ -1,11 +1,10 @@
 # discovery-swarm-stream-java
 server-side java implementation of [discovery-swarm-stream](https://github.com/RangerMauve/discovery-swarm-stream)<br>
 Works with java 1.7 and on android 5.1 upwards.<br>
-Android demo: [DatDiscoveryWebview](https://github.com/fsteff/DatDiscoveryWebview)
-
+Android demo: [DatDiscoveryWebview](https://github.com/fsteff/DatDiscoveryWebview)<br>
+![Release](https://jitpack.io/v/fsteff/discovery-swarm-stream-java.svg)
 ## usage
-[![Release](https://jitpack.io/v/fsteff/discovery-swarm-stream-java.svg)]
-(https://jitpack.io/#fsteff/discovery-swarm-stream-java)
+
 This library is not published on maven, but you can use [jitpack](https://jitpack.io/#fsteff/discovery-swarm-stream-java)
 
 
