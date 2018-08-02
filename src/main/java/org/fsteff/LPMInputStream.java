@@ -54,6 +54,12 @@ public class LPMInputStream implements Iterable<ByteBuffer>{
 			public ByteBuffer next() {
 				return LPMInputStream.this.next();
 			}
+			
+			@Override
+			public
+			void remove() {
+		        throw new UnsupportedOperationException("remove");
+		    }
 		};
 		
 		return it;
